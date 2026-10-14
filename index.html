@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Andamento Processual TJAM</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<style>
+  :root { --azul:#002D72; --dourado:#F5A623; --bg:#f4f6fa; --card:#fff; --txt:#1c2333; --dim:#5c6578; --linha:#dde2ec; --ok:#0a7a3f; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f1420; --card:#18202f; --txt:#e8ecf4; --dim:#9aa4b8; --linha:#2a3448; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Outfit, system-ui, sans-serif; background:var(--bg); color:var(--txt); }
+  header { background:var(--azul); color:#fff; padding:18px 16px; border-bottom:4px solid var(--dourado); }
+  header h1 { margin:0; font-size:1.35rem; } header p { margin:4px 0 0; opacity:.85; font-size:.9rem; }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--linha); border-radius:12px; padding:16px; margin-bottom:14px; }
+  form { display:flex; gap:8px; flex-wrap:wrap; }
+  input { flex:1 1 260px; font:inherit; font-size:1.05rem; padding:10px 12px; border:1px solid var(--linha); border-radius:8px; background:var(--card); color:var(--txt); }
+  button, .btn { font:inherit; font-weight:600; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; background:var(--azul); color:#fff; text-decoration:none; display:inline-block; }
+  .btn.ouro { background:var(--dourado); color:#1c1c1c; } .btn.sec { background:transparent; color:var(--azul); border:1px solid var(--azul); padding:6px 10px; font-size:.85rem; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.sec { color:#9fc0ff; border-color:#9fc0ff; } }
+  button:disabled { opacity:.5; cursor:wait; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; } th, td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--linha); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; }
+  .muted { color:var(--dim); font-size:.88rem; } .ok { color:var(--ok); font-weight:600; }
+  .status { min-height:1.3em; margin-top:8px; font-size:.92rem; }
+  .acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .tabela-wrap { overflow-x:auto; }
+  h2 { font-size:1.1rem; margin:0 0 10px; color:var(--azul); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) h2 { color:#9fc0ff; } }
+  .oculto { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Andamento Processual — TJAM</h1>
+  <p>Digite o número do processo: o relatório (Word) e as certidões oficiais (PDF) ficam prontos para baixar.</p>
+</header>
+<main>
+  <div class="card">
+    <form id="f">
+      <input id="num" placeholder="0000000-00.0000.8.04.0000" autocomplete="off" required>
+      <button id="btn">Consultar</button>
+    </form>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="res" class="oculto">
+    <div class="card">
+      <h2>Downloads</h2>
+      <div class="acoes">
+        <button class="btn ouro" id="dlZip">Baixar tudo (.zip)</button>
+        <button class="btn" id="dlDocx">Baixar relatório (.docx)</button>
+      </div>
+      <p class="muted">O ZIP traz o relatório e todas as certidões em PDF, prontos para arquivar.</p>
+    </div>
+    <div class="card"><h2>Resumo em linguagem simples</h2><p id="situacao"></p><div class="tabela-wrap"><table id="tMarcos"></table></div></div>
+    <div class="card"><h2>Dados do processo</h2><div id="dados"></div></div>
+    <div class="card"><h2>Publicações oficiais (DJEN) e PDFs</h2><div class="tabela-wrap"><table id="tPubs"></table></div></div>
+    <div class="card"><h2>Movimentos (DataJud)</h2><div id="movs" class="muted"></div></div>
+    <div class="card"><h2>Fontes e limites</h2>
+      <ul class="muted">
+        <li><b>DJEN / Comunica PJe (CNJ):</b> publicações e certidões oficiais em PDF, consultadas direto do seu navegador.</li>
+        <li><b>DataJud (CNJ):</b> todos os movimentos (citação, contestação…); processos novos levam semanas para aparecer.</li>
+        <li><b>PROJUDI/TJAM (Juizados):</b> andamento completo e documentos. A consulta pública tem reCAPTCHA e é manual:
+          <a href="https://projudi-consulta.tjam.jus.br/publica" target="_blank" rel="noopener">abrir consulta pública</a>. Documentos dos autos exigem o acesso do advogado.</li>
+        <li>Nada é armazenado: a consulta acontece no seu navegador.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+<script>
+// ===== AKE: build log (append-only) =====
+window._VERSION_LOG = [
+  { v: "1.0.0", data: "2026-10-14", autor: "[Claude]", nota: "Consulta por número no DJEN (Comunica/CNJ, CORS liberado), certidões PDF, marcos em linguagem simples, relatório .docx e ZIP no navegador; DataJud via proxy Apps Script opcional (CORS bloqueado na API do CNJ)." },
+];
+window._VICIOS_CONHECIDOS = [
+  "DJEN: texto de algumas publicações do TJAM vem com acentos corrompidos na origem (ex.: 'Distribuiï¿½ï¿½o'); o PDF da certidão está correto.",
+  "DataJud: API sem CORS; direto do navegador não funciona. Use DATAJUD_PROXY (Apps Script).",
+];
+window._TENTATIVAS_FALHAS = [
+  "Automatizar a consulta pública do PROJUDI: WAF F5 + reCAPTCHA. Não contornar (decisão de 14/10/2026).",
+];
+
+// URL do Web App do Apps Script que repassa a consulta ao DataJud (ver datajud_proxy.gs). Vazio = sem DataJud.
+const DATAJUD_PROXY = "";
+const COMUNICA = "https://comunicaapi.pje.jus.br/api/v1/comunicacao";
+
+// Marcos do rito (mesma tabela do acompanhar.py). Fonte dos nomes: Tabelas Processuais Unificadas do CNJ (Res. 46/2007).
+const MARCOS = [
+  ["Distribuição", /distribu/i, "O processo foi registrado e enviado a um juízo (vara/juizado)."],
+  ["Citação", /cita[çc][ãa]o|citad/i, "O réu (aqui, em regra, o Estado) foi chamado oficialmente para se defender."],
+  ["Contestação", /contesta/i, "O réu apresentou a defesa por escrito."],
+  ["Réplica / impugnação", /r[ée]plica|impugna[çc][ãa]o [àa] contesta/i, "O autor respondeu à defesa do réu."],
+  ["Audiência", /audi[êe]ncia/i, "Houve (ou foi marcada) audiência de conciliação ou instrução."],
+  ["Conclusão ao juiz", /conclus/i, "Os autos foram para o juiz decidir ou despachar."],
+  ["Despacho", /despacho|mero expediente/i, "Ordem do juiz para andamento (sem decidir o mérito)."],
+  ["Decisão / tutela", /(?<!para )decis[ãa]o|tutela|liminar/i, "O juiz decidiu uma questão do processo (pode ser pedido urgente)."],
+  ["Sentença", /(?<!para )(?<!cumprimento de )senten[çc]a|julgad[oa] (procedente|improcedente)|proced[êe]ncia/i, "O juiz julgou o pedido (procedente, parcialmente ou improcedente)."],
+  ["Recurso", /recurso|apela[çc][ãa]o|embargos|turma recursal/i, "Uma das partes recorreu; o caso vai (ou foi) para a Turma Recursal/Tribunal."],
+  ["Trânsito em julgado", /tr[âa]nsito em julgado|transitad/i, "Não cabe mais recurso: a decisão ficou definitiva."],
+  ["Cumprimento / pagamento", /cumprimento de senten[çc]a|requisi[çc][ãa]o de pequeno valor|\brpv\b|precat[óo]rio|alvar[áa]/i, "Fase de cobrar e receber o valor (RPV/precatório/alvará)."],
+  ["Arquivamento / baixa", /arquiv|baixa definitiva/i, "O processo foi encerrado e arquivado."],
+];
+
+const $ = (id) => document.getElementById(id);
+const so = (s) => (s || "").replace(/\D/g, "");
+const fmt = (d) => `${d.slice(0,7)}-${d.slice(7,9)}.${d.slice(9,13)}.${d.slice(13,14)}.${d.slice(14,16)}.${d.slice(16)}`;
+const dataBR = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "";
+const limpa = (t) => (t || "").replace(/<br\s*\/?>|<\/p>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ").trim();
+const esc = (t) => (t || "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+// Dígito verificador CNJ (Res. CNJ 65/2008): DD = 98 - (NNNNNNN AAAA J TR OOOO 00 mod 97)
+function dvOk(d) {
+  if (d.length !== 20) return false;
+  const base = d.slice(0,7) + d.slice(9) + "00";
+  let r = 0; for (const c of base) r = (r * 10 + +c) % 97;
+  return 98 - r === +d.slice(7,9);
+}
+
+async function comunica(params) {
+  const itens = [];
+  for (let pag = 1; pag <= 20; pag++) {
+    const u = COMUNICA + "?" + new URLSearchParams({ ...params, itensPorPagina: 100, pagina: pag });
+    const r = await fetch(u); if (!r.ok) throw new Error("DJEN respondeu " + r.status);
+    const lote = (await r.json()).items || []; itens.push(...lote);
+    if (lote.length < 100) break;
+  }
+  return itens.sort((a, b) => a.data_disponibilizacao.localeCompare(b.data_disponibilizacao));
+}
+
+async function datajud(d) {
+  if (!DATAJUD_PROXY) return { erro: "consulta ao DataJud não configurada nesta página (precisa do proxy Apps Script)" };
+  try {
+    const r = await fetch(DATAJUD_PROXY + "?numero=" + d); const j = await r.json();
+    if (j.erro) return { erro: j.erro };
+    const movs = [];
+    for (const h of j.hits || []) for (const m of h._source.movimentos || [])
+      movs.push({ data: (m.dataHora || "").slice(0,10), grau: h._source.grau, nome: m.nome, codigo: m.codigo });
+    return { movs: movs.sort((a, b) => a.data.localeCompare(b.data)) };
+  } catch (e) { return { erro: "DataJud indisponível (" + e.message + ")" }; }
+}
+
+function dadosDaDistribuicao(texto) {
+  const t = limpa(texto), out = [];
+  const pega = (rot, rx) => { const m = t.match(rx); if (m) out.push([rot, m[1].trim()]); };
+  pega("Classe", /Processo: \S+ - ([^-\n]+?) - Vara/); pega("Vara de origem", /Vara Origem: (.+?) - Juiz/);
+  pega("Juiz", /Juiz: (.+?) - Data/); pega("Data de vinculação", /Data Vincula\S*: (\S+)/);
+  for (const m of t.matchAll(/(Apelante|Apelado|Autor|Réu|Requerente|Requerido|Reclamante|Reclamado)\S*: ([^\n]+?)\s*\n\s*Advogado\S*: ([^\n]+)/g))
+    out.push([m[1], `${m[2].trim()} — advogado(a): ${m[3].trim()}`]);
+  return out;
+}
+
+let ULTIMO = null;
+
+$("f").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const d = so($("num").value);
+  if (!dvOk(d)) { $("status").textContent = "Número inválido: confira os 20 dígitos (o dígito verificador não bate)."; return; }
+  const numero = fmt(d);
+  $("btn").disabled = true; $("res").classList.add("oculto");
+  try {
+    $("status").textContent = "Consultando o Diário de Justiça Eletrônico Nacional…";
+    const pubs = (await comunica({ numeroProcesso: d })).map((p) => ({
+      id: p.id, hash: p.hash, data: p.data_disponibilizacao, tipo: p.tipoComunicacao, orgao: p.nomeOrgao,
+      doc: p.tipoDocumento, classe: p.nomeClasse, texto: limpa(p.texto), tribunal: p.siglaTribunal,
+      pdf: `${COMUNICA}/${p.hash}/certidao`, arquivo: `${p.data_disponibilizacao}_${(p.tipoComunicacao || "").replace(/[^\p{L}\p{N}]+/gu, "-")}_${p.id}.pdf` }));
+    $("status").textContent = "Consultando o DataJud…";
+    const dj = await datajud(d);
+    const eventos = pubs.map((p) => [p.data, `${p.tipo} ${p.doc || ""} ${p.texto.slice(0, 600)}`])
+      .concat((dj.movs || []).map((m) => [m.data, m.nome || ""]));
+    const marcos = MARCOS.map(([nome, rx, expl]) => {
+      const ds = eventos.filter(([, t]) => rx.test(t)).map(([dt]) => dt).sort();
+      return { nome, data: ds[0] || null, expl };
+    });
+    ULTIMO = { numero, pubs, dj, marcos, dados: pubs.length ? dadosDaDistribuicao(pubs[0].texto) : [], quando: new Date() };
+    mostrar(ULTIMO);
+    $("status").innerHTML = pubs.length ? `<span class="ok">Pronto.</span> ${pubs.length} publicação(ões) oficial(is) encontrada(s).`
+      : "Nenhuma publicação no DJEN para este número (confira o número ou se o processo é sigiloso).";
+  } catch (e) {
+    $("status").textContent = "Erro na consulta: " + e.message;
+  } finally { $("btn").disabled = false; }
+};
+
+function mostrar(R) {
+  const ocorr = R.marcos.filter((m) => m.data);
+  const ult = ocorr[ocorr.length - 1];
+  $("situacao").innerHTML = ult ? `Situação atual: a última etapa identificada é <b>${ult.nome.toLowerCase()}</b> (${dataBR(ult.data)}). ${ult.expl}`
+    : "Nenhuma etapa identificada nas fontes consultadas.";
+  $("tMarcos").innerHTML = "<tr><th>Etapa</th><th>Quando</th><th>O que significa</th></tr>" +
+    R.marcos.map((m) => `<tr><td>${m.nome}</td><td>${m.data ? dataBR(m.data) : '<span class="muted">ainda não consta</span>'}</td><td class="muted">${m.expl}</td></tr>`).join("");
+  $("dados").innerHTML = R.dados.length ? "<table>" + R.dados.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("") + "</table>"
+    : `<p class="muted">Número ${R.numero}.</p>`;
+  $("tPubs").innerHTML = "<tr><th>Data</th><th>Publicação</th><th>Órgão</th><th>PDF</th></tr>" +
+    R.pubs.map((p) => `<tr><td>${dataBR(p.data)}</td><td>${esc(p.tipo)}<br><span class="muted">${esc(p.doc || "")}</span></td><td>${esc(p.orgao)}</td>
+      <td><button class="btn sec" data-i="${R.pubs.indexOf(p)}">Baixar PDF</button></td></tr>`).join("");
+  // PDF de outro domínio: o atributo download é ignorado, então baixa como blob (a API libera CORS)
+  for (const b of $("tPubs").querySelectorAll("button[data-i]")) b.onclick = async () => {
+    const p = R.pubs[+b.dataset.i]; b.disabled = true;
+    try { const r = await fetch(p.pdf); if (!r.ok) throw new Error(r.status); baixar(await r.blob(), p.arquivo); }
+    catch (e) { window.open(p.pdf, "_blank", "noopener"); }
+    finally { b.disabled = false; }
+  };
+  $("movs").innerHTML = R.dj.movs ? (R.dj.movs.length ? "<table><tr><th>Data</th><th>Grau</th><th>Movimento</th></tr>" +
+      R.dj.movs.map((m) => `<tr><td>${dataBR(m.data)}</td><td>${m.grau}</td><td>${esc(m.nome)}</td></tr>`).join("") + "</table>"
+      : "Processo ainda não indexado no DataJud (normal para processos recentes).") : esc(R.dj.erro);
+  $("res").classList.remove("oculto");
+}
+
+// ===== Relatório Word (docx.js no navegador) =====
+async function gerarDocx(R) {
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel } = docx;
+  const P = (t, o = {}) => new Paragraph({ children: [new TextRun({ text: t, ...o })], spacing: { after: 80 } });
+  const H = (t) => new Paragraph({ text: t, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } });
+  const T = (linhas) => new Table({ width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: linhas.map((l, i) => new TableRow({ children: l.map((c) => new TableCell({ children: [P(String(c), { bold: i === 0, size: 19 })] })) })) });
+  const ocorr = R.marcos.filter((m) => m.data), ult = ocorr[ocorr.length - 1];
+  const filhos = [
+    new Paragraph({ children: [new TextRun({ text: `ACOMPANHAMENTO PROCESSUAL — ${R.numero} (TJAM)`, bold: true, size: 30, color: "002D72" })] }),
+    P(`Gerado em ${R.quando.toLocaleString("pt-BR")} pela página Andamento Processual TJAM. Uso interno: contém nomes de partes e advogados.`, { italics: true, size: 18 }),
+    H("Resumo em linguagem simples"),
+    P(ult ? `Situação atual: a última etapa identificada é ${ult.nome.toLowerCase()} (${dataBR(ult.data)}). ${ult.expl}` : "Nenhuma etapa identificada nas fontes consultadas."),
+    T([["Etapa", "Quando", "O que significa"], ...R.marcos.map((m) => [m.nome, m.data ? dataBR(m.data) : "ainda não consta", m.expl])]),
+    P("\"Ainda não consta\": a etapa não aparece nas fontes até agora; pode não ter acontecido ou ainda não ter sido publicada/indexada.", { size: 18, italics: true }),
+    H("Dados do processo"),
+    ...(R.dados.length ? R.dados.map(([k, v]) => P(`${k}: ${v}`)) : [P("Sem publicação de distribuição no DJEN.")]),
+    H("Linha do tempo"),
+    T([["Data", "Fonte", "Andamento"],
+       ...[...R.pubs.map((p) => [p.data, "DJEN", `${p.tipo} — ${p.doc || ""} (${p.orgao})`]),
+           ...(R.dj.movs || []).map((m) => [m.data, "DataJud " + m.grau, m.nome])]
+         .sort((a, b) => a[0].localeCompare(b[0])).map(([d, f, a]) => [dataBR(d), f, a])]),
+    P(R.dj.movs ? (R.dj.movs.length ? "" : "DataJud: processo ainda não indexado.") : "DataJud: " + R.dj.erro, { size: 18 }),
+    H("Íntegra das publicações oficiais (DJEN)"),
+    ...R.pubs.flatMap((p) => [P(`${dataBR(p.data)} — ${p.tipo} — ${p.orgao}`, { bold: true }), ...p.texto.split("\n").map((l) => P(l)), P(`PDF: certidoes/${p.arquivo}`, { size: 18 })]),
+    H("Fontes e limites"),
+    P("DJEN / Comunica PJe (CNJ): publicações e certidões oficiais em PDF."),
+    P("DataJud (CNJ): movimentos processuais, com atraso de semanas para processos novos."),
+    P("PROJUDI/TJAM: andamento completo e documentos; consulta pública com reCAPTCHA (manual) e documentos só com o acesso do advogado."),
+  ];
+  return Packer.toBlob(new Document({ styles: { default: { document: { run: { font: "Calibri", size: 21 } } } }, sections: [{ children: filhos }] }));
+}
+
+function baixar(blob, nome) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+$("dlDocx").onclick = async () => { if (ULTIMO) baixar(await gerarDocx(ULTIMO), `Relatorio_${ULTIMO.numero}.docx`); };
+$("dlZip").onclick = async () => {
+  if (!ULTIMO) return;
+  const b = $("dlZip"); b.disabled = true; $("status").textContent = "Montando o ZIP (baixando as certidões)…";
+  try {
+    const zip = new JSZip(), pasta = zip.folder(ULTIMO.numero);
+    pasta.file(`Relatorio_${ULTIMO.numero}.docx`, await gerarDocx(ULTIMO));
+    for (const p of ULTIMO.pubs) {
+      const r = await fetch(p.pdf);
+      if (r.ok) pasta.folder("certidoes").file(p.arquivo, await r.blob());
+    }
+    baixar(await zip.generateAsync({ type: "blob" }), `Processo_${ULTIMO.numero}.zip`);
+    $("status").innerHTML = '<span class="ok">ZIP pronto.</span>';
+  } catch (e) { $("status").textContent = "Erro ao montar o ZIP: " + e.message; }
+  finally { b.disabled = false; }
+};
+</script>
+</body>
+</html>

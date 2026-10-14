@@ -15,10 +15,15 @@ python -m venv .venv
 ```
 A saída vai para `Desktop\Processos TJAM\<número>\`, ou para a pasta definida na variável `JUS_SAIDA`.
 
-### Pelo site do GitHub (Actions)
-1. **O repositório precisa ser privado.** O workflow não roda em repositório público, porque o relatório tem nomes de partes e advogados.
-2. Abra **Actions → Consultar processo TJAM → Run workflow**, informe o número (e a OAB, se quiser) e confirme.
-3. Quando o run terminar, baixe o artefato `processo-<número>`, que contém a pasta com os PDFs e o relatório. Ele fica disponível por 7 dias.
+### Pela página (GitHub Pages)
+**https://leonzordhue.github.io/andamentoproc/**: digite o número, clique em **Consultar** e baixe:
+- **Baixar tudo (.zip)**: relatório Word + todas as certidões oficiais em PDF;
+- **Baixar relatório (.docx)**;
+- **Baixar PDF** de cada publicação.
+
+A consulta roda no navegador de quem usa (a API do DJEN libera CORS). Nada é guardado no GitHub, por isso a página pode ficar pública.
+
+**Movimentos do DataJud na página:** a API do CNJ não libera CORS. Publique o `datajud_proxy.gs` no Google Apps Script (instruções no topo do arquivo) e cole a URL `/exec` em `DATAJUD_PROXY` no `index.html`. Sem isso, a página mostra só as publicações do DJEN; o programa em Python consulta o DataJud direto.
 
 ## O que vai na pasta do processo
 | Arquivo | Conteúdo |
