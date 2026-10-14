@@ -59,7 +59,7 @@
     <div class="card"><h2>Resumo em linguagem simples</h2><p id="situacao"></p><div class="tabela-wrap"><table id="tMarcos"></table></div></div>
     <div class="card"><h2>Dados do processo</h2><div id="dados"></div></div>
     <div class="card"><h2>Publicações oficiais (DJEN) e PDFs</h2><div class="tabela-wrap"><table id="tPubs"></table></div></div>
-    <div class="card"><h2>Movimentos (DataJud)</h2><div id="movs" class="muted"></div></div>
+    <div class="card"><h2>Movimentações (linha do tempo)</h2><p class="muted" id="movsNota"></p><div class="tabela-wrap"><table id="tMovs"></table></div></div>
     <div class="card"><h2>Fontes e limites</h2>
       <ul class="muted">
         <li><b>DJEN / Comunica PJe (CNJ):</b> publicações e certidões oficiais em PDF, consultadas direto do seu navegador.</li>
@@ -74,6 +74,7 @@
 <script>
 // ===== AKE: build log (append-only) =====
 window._VERSION_LOG = [
+  { v: "1.2.0", data: "2026-10-14", autor: "[Nexus]", nota: "Pedido do cliente (datas das movimentações): card único 'Movimentações (linha do tempo)' com data e hora (Manaus), DJEN + DataJud, mais recente primeiro; mesma tabela no .docx. Antes o card só mostrava DataJud e ficava vazio em processo novo." },
   { v: "1.1.0", data: "2026-10-14", autor: "[Claude]", nota: "DataJud ligado via proxy Apps Script publicado pelo Paulo (movimentos: citação, contestação, sentença…); nova tentativa quando o Apps Script devolve HTML." },
   { v: "1.0.0", data: "2026-10-14", autor: "[Claude]", nota: "Consulta por número no DJEN (Comunica/CNJ, CORS liberado), certidões PDF, marcos em linguagem simples, relatório .docx e ZIP no navegador; DataJud via proxy Apps Script opcional (CORS bloqueado na API do CNJ)." },
 ];
@@ -110,6 +111,12 @@ const $ = (id) => document.getElementById(id);
 const so = (s) => (s || "").replace(/\D/g, "");
 const fmt = (d) => `${d.slice(0,7)}-${d.slice(7,9)}.${d.slice(9,13)}.${d.slice(13,14)}.${d.slice(14,16)}.${d.slice(16)}`;
 const dataBR = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "";
+// DataJud grava dataHora em UTC ("2026-06-08T12:30:01.000Z"); mostra a hora de Manaus
+const horaBR = (iso) => { const t = Date.parse(iso || ""); return isNaN(t) ? "" : new Date(t).toLocaleTimeString("pt-BR", { timeZone: "America/Manaus", hour: "2-digit", minute: "2-digit" }); };
+// Todas as movimentações (DJEN + DataJud), mais recente primeiro
+const linhaDoTempo = (R) => [...R.pubs.map((p) => ({ data: p.data, hora: "", fonte: "DJEN", texto: `${p.tipo} — ${p.doc || ""} (${p.orgao})` })),
+  ...(R.dj.movs || []).map((m) => ({ data: m.data, hora: m.hora, fonte: "DataJud " + m.grau, texto: m.nome || "" }))]
+  .sort((a, b) => (b.data + b.hora).localeCompare(a.data + a.hora));
 const limpa = (t) => (t || "").replace(/<br\s*\/?>|<\/p>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ").trim();
 const esc = (t) => (t || "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 
@@ -144,7 +151,7 @@ async function datajud(d) {
     if (j.erro) return { erro: j.erro };
     const movs = [];
     for (const h of j.hits || []) for (const m of h._source.movimentos || [])
-      movs.push({ data: (m.dataHora || "").slice(0,10), grau: h._source.grau, nome: m.nome, codigo: m.codigo });
+      movs.push({ data: (m.dataHora || "").slice(0,10), hora: horaBR(m.dataHora), grau: h._source.grau, nome: m.nome, codigo: m.codigo });
     return { movs: movs.sort((a, b) => a.data.localeCompare(b.data)) };
   } catch (e) { return { erro: "DataJud indisponível (" + e.message + ")" }; }
 }
@@ -209,9 +216,12 @@ function mostrar(R) {
     catch (e) { window.open(p.pdf, "_blank", "noopener"); }
     finally { b.disabled = false; }
   };
-  $("movs").innerHTML = R.dj.movs ? (R.dj.movs.length ? "<table><tr><th>Data</th><th>Grau</th><th>Movimento</th></tr>" +
-      R.dj.movs.map((m) => `<tr><td>${dataBR(m.data)}</td><td>${m.grau}</td><td>${esc(m.nome)}</td></tr>`).join("") + "</table>"
-      : "Processo ainda não indexado no DataJud (normal para processos recentes).") : esc(R.dj.erro);
+  const lt = linhaDoTempo(R);
+  $("tMovs").innerHTML = lt.length ? "<tr><th>Data</th><th>Hora</th><th>Movimentação</th><th>Fonte</th></tr>" +
+    lt.map((m) => `<tr><td>${dataBR(m.data)}</td><td>${m.hora || "—"}</td><td>${esc(m.texto)}</td><td class="muted">${esc(m.fonte)}</td></tr>`).join("") : "";
+  $("movsNota").innerHTML = `${lt.length} movimentação(ões), da mais recente para a mais antiga. ` + (R.dj.movs
+    ? (R.dj.movs.length ? "" : "DataJud ainda não indexou este processo (normal nas primeiras semanas): por ora só aparecem as publicações do DJEN. Nos Juizados, o andamento completo está no PROJUDI (link abaixo).")
+    : "DataJud: " + esc(R.dj.erro) + ".");
   $("res").classList.remove("oculto");
 }
 
@@ -233,10 +243,7 @@ async function gerarDocx(R) {
     H("Dados do processo"),
     ...(R.dados.length ? R.dados.map(([k, v]) => P(`${k}: ${v}`)) : [P("Sem publicação de distribuição no DJEN.")]),
     H("Linha do tempo"),
-    T([["Data", "Fonte", "Andamento"],
-       ...[...R.pubs.map((p) => [p.data, "DJEN", `${p.tipo} — ${p.doc || ""} (${p.orgao})`]),
-           ...(R.dj.movs || []).map((m) => [m.data, "DataJud " + m.grau, m.nome])]
-         .sort((a, b) => a[0].localeCompare(b[0])).map(([d, f, a]) => [dataBR(d), f, a])]),
+    T([["Data", "Hora", "Movimentação", "Fonte"], ...linhaDoTempo(R).map((m) => [dataBR(m.data), m.hora || "—", m.texto, m.fonte])]),
     P(R.dj.movs ? (R.dj.movs.length ? "" : "DataJud: processo ainda não indexado.") : "DataJud: " + R.dj.erro, { size: 18 }),
     H("Íntegra das publicações oficiais (DJEN)"),
     ...R.pubs.flatMap((p) => [P(`${dataBR(p.data)} — ${p.tipo} — ${p.orgao}`, { bold: true }), ...p.texto.split("\n").map((l) => P(l)), P(`PDF: certidoes/${p.arquivo}`, { size: 18 })]),
