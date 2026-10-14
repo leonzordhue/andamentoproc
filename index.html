@@ -74,6 +74,7 @@
 <script>
 // ===== AKE: build log (append-only) =====
 window._VERSION_LOG = [
+  { v: "1.3.1", data: "2026-10-14", autor: "[Nexus]", nota: "Link direto com ?processo=<número>: a página abre já consultando." },
   { v: "1.3.0", data: "2026-10-14", autor: "[Nexus]", nota: "Cliente consultou processo do TJPA (8.14): o proxy só aceitava TJAM e a página mostrou tudo 'ainda não consta' sem dizer por quê. Proxy agora deduz o tribunal pelo número (TJs, TRFs, TRTs, TREs, STJ); página e .docx sem 'TJAM' fixo; motivo aparece quando não há dados." },
   { v: "1.2.0", data: "2026-10-14", autor: "[Nexus]", nota: "Pedido do cliente (datas das movimentações): card único 'Movimentações (linha do tempo)' com data e hora (Manaus), DJEN + DataJud, mais recente primeiro; mesma tabela no .docx. Antes o card só mostrava DataJud e ficava vazio em processo novo." },
   { v: "1.1.0", data: "2026-10-14", autor: "[Claude]", nota: "DataJud ligado via proxy Apps Script publicado pelo Paulo (movimentos: citação, contestação, sentença…); nova tentativa quando o Apps Script devolve HTML." },
@@ -266,6 +267,10 @@ function baixar(blob, nome) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nome;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+
+// Link direto: ?processo=0000000-00.0000.8.04.0000 já abre consultado
+const PARAM = new URLSearchParams(location.search).get("processo");
+if (PARAM) { $("num").value = PARAM; $("f").requestSubmit(); }
 
 $("dlDocx").onclick = async () => { if (ULTIMO) baixar(await gerarDocx(ULTIMO), `Relatorio_${ULTIMO.numero}.docx`); };
 $("dlZip").onclick = async () => {
