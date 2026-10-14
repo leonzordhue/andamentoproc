@@ -71,14 +71,23 @@ def limpa(t):
 
 def comunica(params, max_paginas=20):
     """API pública do Comunica PJe (DJEN). Filtros exatos: numeroProcesso, numeroOab/ufOab, siglaTribunal, datas."""
+    import time
     itens = []
     for pag in range(1, max_paginas + 1):
-        r = requests.get(COMUNICA, params=dict(params, itensPorPagina=100, pagina=pag), timeout=90)
-        r.raise_for_status()
+        for tent in range(4):  # a API corta conexões em rajada (SSL EOF/429): espera e tenta de novo
+            try:
+                r = requests.get(COMUNICA, params=dict(params, itensPorPagina=100, pagina=pag), timeout=90)
+                r.raise_for_status()
+                break
+            except requests.RequestException:
+                if tent == 3:
+                    raise
+                time.sleep(5 * (tent + 1))
         lote = r.json().get("items", [])
         itens += lote
         if len(lote) < 100:
             break
+        time.sleep(1)
     return itens
 
 
@@ -276,9 +285,13 @@ def acompanhar(numero, oab):
     if oab:
         num_oab, uf = (oab.split("/") + ["AM"])[:2]
         hoje = dt.date.today()
-        oab_pubs = comunica({"numeroOab": num_oab, "ufOab": uf, "siglaTribunal": "TJAM",
-                             "dataDisponibilizacaoInicio": (hoje - dt.timedelta(days=7)).isoformat(),
-                             "dataDisponibilizacaoFim": hoje.isoformat()})
+        try:  # lista da OAB é complementar: se falhar, o relatório do processo sai assim mesmo
+            oab_pubs = comunica({"numeroOab": num_oab, "ufOab": uf, "siglaTribunal": "TJAM",
+                                 "dataDisponibilizacaoInicio": (hoje - dt.timedelta(days=7)).isoformat(),
+                                 "dataDisponibilizacaoFim": hoje.isoformat()}, max_paginas=15)
+        except requests.RequestException as e:
+            print("  lista da OAB indisponível agora (%s)" % type(e).__name__)
+            oab_pubs = None
     if oab_pubs:
         import pandas as pd
         cols = ["datadisponibilizacao", "numeroprocessocommascara", "tipoComunicacao", "nomeOrgao", "nomeClasse", "tipoDocumento"]
@@ -297,7 +310,7 @@ def main():
     a = a.parse_args()
     lista = os.path.join(BASE_DIR, "processos.txt")
     nums = a.numeros or ([l.strip() for l in open(lista, encoding="utf-8") if l.strip() and not l.startswith("#")]
-                         if os.path.exists(lista) and not sys.stdin.isatty() else [])
+                         if os.path.exists(lista) and not (sys.stdin and sys.stdin.isatty()) else [])
     if not nums:  # uso interativo: pergunta o número
         nums = [input("Número do processo (TJAM): ").strip()]
     linhas = []
