@@ -1,0 +1,9 @@
+# ambiente e resultados (resultados têm nomes de partes/advogados: nunca versionar)
+.venv/
+saida/
+*.log
+__pycache__/
+# lista real de processos de clientes fica só na máquina
+processos.txt
+# relatório pontual de teste (14/10/2026)
+relatorio_teste_processo.py

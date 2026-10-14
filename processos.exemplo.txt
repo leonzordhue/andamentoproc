@@ -1,0 +1,2 @@
+# um número de processo do TJAM por linha (copie para processos.txt; processos.txt não vai para o GitHub)
+0000000-00.0000.8.04.0000
