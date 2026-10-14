@@ -23,7 +23,7 @@ A saída vai para `Desktop\Processos TJAM\<número>\`, ou para a pasta definida 
 
 A consulta roda no navegador de quem usa (a API do DJEN libera CORS). Nada é guardado no GitHub, por isso a página pode ficar pública.
 
-**Movimentos do DataJud na página:** a API do CNJ não libera CORS. Publique o `datajud_proxy.gs` no Google Apps Script (instruções no topo do arquivo) e cole a URL `/exec` em `DATAJUD_PROXY` no `index.html`. Sem isso, a página mostra só as publicações do DJEN; o programa em Python consulta o DataJud direto.
+**Movimentos do DataJud na página:** a API do CNJ não libera CORS. Publique o `datajud_proxy.gs` no Google Apps Script (instruções no topo do arquivo) e cole a URL `/exec` em `DATAJUD_PROXY` no `index.html` (já publicado e ligado em 14/10/2026).
 
 ## O que vai na pasta do processo
 | Arquivo | Conteúdo |

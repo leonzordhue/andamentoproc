@@ -74,6 +74,7 @@
 <script>
 // ===== AKE: build log (append-only) =====
 window._VERSION_LOG = [
+  { v: "1.1.0", data: "2026-10-14", autor: "[Claude]", nota: "DataJud ligado via proxy Apps Script publicado pelo Paulo (movimentos: citação, contestação, sentença…); nova tentativa quando o Apps Script devolve HTML." },
   { v: "1.0.0", data: "2026-10-14", autor: "[Claude]", nota: "Consulta por número no DJEN (Comunica/CNJ, CORS liberado), certidões PDF, marcos em linguagem simples, relatório .docx e ZIP no navegador; DataJud via proxy Apps Script opcional (CORS bloqueado na API do CNJ)." },
 ];
 window._VICIOS_CONHECIDOS = [
@@ -85,7 +86,7 @@ window._TENTATIVAS_FALHAS = [
 ];
 
 // URL do Web App do Apps Script que repassa a consulta ao DataJud (ver datajud_proxy.gs). Vazio = sem DataJud.
-const DATAJUD_PROXY = "";
+const DATAJUD_PROXY = "https://script.google.com/macros/s/AKfycbxFAWomUwX66Z-mxyAzV0FjfGiopr2XPz3Mcf5j3J6zPNQhfvGBCn7AbNH-fQkxviQ80A/exec";
 const COMUNICA = "https://comunicaapi.pje.jus.br/api/v1/comunicacao";
 
 // Marcos do rito (mesma tabela do acompanhar.py). Fonte dos nomes: Tabelas Processuais Unificadas do CNJ (Res. 46/2007).
@@ -134,7 +135,12 @@ async function comunica(params) {
 async function datajud(d) {
   if (!DATAJUD_PROXY) return { erro: "consulta ao DataJud não configurada nesta página (precisa do proxy Apps Script)" };
   try {
-    const r = await fetch(DATAJUD_PROXY + "?numero=" + d); const j = await r.json();
+    let j = null;
+    for (let t = 0; t < 3 && !j; t++) {  // Apps Script às vezes devolve página HTML de erro na partida a frio: tenta de novo
+      const r = await fetch(DATAJUD_PROXY + "?numero=" + d);
+      try { j = await r.json(); } catch (e) { await new Promise((ok) => setTimeout(ok, 2000)); }
+    }
+    if (!j) return { erro: "DataJud indisponível agora (tente de novo)" };
     if (j.erro) return { erro: j.erro };
     const movs = [];
     for (const h of j.hits || []) for (const m of h._source.movimentos || [])
