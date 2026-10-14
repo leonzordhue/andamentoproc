@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Andamento Processual TJAM</title>
+<title>Andamento Processual</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
@@ -35,7 +35,7 @@
 </head>
 <body>
 <header>
-  <h1>Andamento Processual — TJAM</h1>
+  <h1>Andamento Processual</h1>
   <p>Digite o número do processo: o relatório (Word) e as certidões oficiais (PDF) ficam prontos para baixar.</p>
 </header>
 <main>
@@ -74,6 +74,7 @@
 <script>
 // ===== AKE: build log (append-only) =====
 window._VERSION_LOG = [
+  { v: "1.3.0", data: "2026-10-14", autor: "[Nexus]", nota: "Cliente consultou processo do TJPA (8.14): o proxy só aceitava TJAM e a página mostrou tudo 'ainda não consta' sem dizer por quê. Proxy agora deduz o tribunal pelo número (TJs, TRFs, TRTs, TREs, STJ); página e .docx sem 'TJAM' fixo; motivo aparece quando não há dados." },
   { v: "1.2.0", data: "2026-10-14", autor: "[Nexus]", nota: "Pedido do cliente (datas das movimentações): card único 'Movimentações (linha do tempo)' com data e hora (Manaus), DJEN + DataJud, mais recente primeiro; mesma tabela no .docx. Antes o card só mostrava DataJud e ficava vazio em processo novo." },
   { v: "1.1.0", data: "2026-10-14", autor: "[Claude]", nota: "DataJud ligado via proxy Apps Script publicado pelo Paulo (movimentos: citação, contestação, sentença…); nova tentativa quando o Apps Script devolve HTML." },
   { v: "1.0.0", data: "2026-10-14", autor: "[Claude]", nota: "Consulta por número no DJEN (Comunica/CNJ, CORS liberado), certidões PDF, marcos em linguagem simples, relatório .docx e ZIP no navegador; DataJud via proxy Apps Script opcional (CORS bloqueado na API do CNJ)." },
@@ -152,7 +153,7 @@ async function datajud(d) {
     const movs = [];
     for (const h of j.hits || []) for (const m of h._source.movimentos || [])
       movs.push({ data: (m.dataHora || "").slice(0,10), hora: horaBR(m.dataHora), grau: h._source.grau, nome: m.nome, codigo: m.codigo });
-    return { movs: movs.sort((a, b) => a.data.localeCompare(b.data)) };
+    return { movs: movs.sort((a, b) => a.data.localeCompare(b.data)), tribunal: (j.tribunal || "").toUpperCase() };
   } catch (e) { return { erro: "DataJud indisponível (" + e.message + ")" }; }
 }
 
@@ -188,20 +189,26 @@ $("f").onsubmit = async (ev) => {
       const ds = eventos.filter(([, t]) => rx.test(t)).map(([dt]) => dt).sort();
       return { nome, data: ds[0] || null, expl };
     });
-    ULTIMO = { numero, pubs, dj, marcos, dados: pubs.length ? dadosDaDistribuicao(pubs[0].texto) : [], quando: new Date() };
+    ULTIMO = { numero, pubs, dj, marcos, tribunal: (pubs[0] && pubs[0].tribunal) || dj.tribunal || (d.slice(13,16) === "804" ? "TJAM" : ""), dados: pubs.length ? dadosDaDistribuicao(pubs[0].texto) : [], quando: new Date() };
     mostrar(ULTIMO);
     $("status").innerHTML = pubs.length ? `<span class="ok">Pronto.</span> ${pubs.length} publicação(ões) oficial(is) encontrada(s).`
-      : "Nenhuma publicação no DJEN para este número (confira o número ou se o processo é sigiloso).";
+      : ULTIMO.dj.movs && ULTIMO.dj.movs.length ? `<span class="ok">Pronto.</span> ${ULTIMO.dj.movs.length} movimento(s) no DataJud; nenhuma publicação no DJEN.`
+    : "Nada encontrado: " + semDados(ULTIMO);
   } catch (e) {
     $("status").textContent = "Erro na consulta: " + e.message;
   } finally { $("btn").disabled = false; }
 };
 
+function semDados(R) {
+  return R.dj.erro ? `DataJud: ${esc(R.dj.erro)}.` : R.dj.movs && R.dj.movs.length ? ""
+    : "O processo não tem publicação no DJEN e ainda não está no DataJud (confira o número, se é sigiloso ou se é muito recente).";
+}
+
 function mostrar(R) {
   const ocorr = R.marcos.filter((m) => m.data);
   const ult = ocorr[ocorr.length - 1];
   $("situacao").innerHTML = ult ? `Situação atual: a última etapa identificada é <b>${ult.nome.toLowerCase()}</b> (${dataBR(ult.data)}). ${ult.expl}`
-    : "Nenhuma etapa identificada nas fontes consultadas.";
+    : "Nenhuma etapa identificada nas fontes consultadas. " + semDados(R);
   $("tMarcos").innerHTML = "<tr><th>Etapa</th><th>Quando</th><th>O que significa</th></tr>" +
     R.marcos.map((m) => `<tr><td>${m.nome}</td><td>${m.data ? dataBR(m.data) : '<span class="muted">ainda não consta</span>'}</td><td class="muted">${m.expl}</td></tr>`).join("");
   $("dados").innerHTML = R.dados.length ? "<table>" + R.dados.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("") + "</table>"
@@ -234,8 +241,8 @@ async function gerarDocx(R) {
     rows: linhas.map((l, i) => new TableRow({ children: l.map((c) => new TableCell({ children: [P(String(c), { bold: i === 0, size: 19 })] })) })) });
   const ocorr = R.marcos.filter((m) => m.data), ult = ocorr[ocorr.length - 1];
   const filhos = [
-    new Paragraph({ children: [new TextRun({ text: `ACOMPANHAMENTO PROCESSUAL — ${R.numero} (TJAM)`, bold: true, size: 30, color: "002D72" })] }),
-    P(`Gerado em ${R.quando.toLocaleString("pt-BR")} pela página Andamento Processual TJAM. Uso interno: contém nomes de partes e advogados.`, { italics: true, size: 18 }),
+    new Paragraph({ children: [new TextRun({ text: `ACOMPANHAMENTO PROCESSUAL — ${R.numero}${R.tribunal ? " (" + R.tribunal + ")" : ""}`, bold: true, size: 30, color: "002D72" })] }),
+    P(`Gerado em ${R.quando.toLocaleString("pt-BR")} pela página Andamento Processual. Uso interno: contém nomes de partes e advogados.`, { italics: true, size: 18 }),
     H("Resumo em linguagem simples"),
     P(ult ? `Situação atual: a última etapa identificada é ${ult.nome.toLowerCase()} (${dataBR(ult.data)}). ${ult.expl}` : "Nenhuma etapa identificada nas fontes consultadas."),
     T([["Etapa", "Quando", "O que significa"], ...R.marcos.map((m) => [m.nome, m.data ? dataBR(m.data) : "ainda não consta", m.expl])]),
