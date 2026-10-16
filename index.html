@@ -34,6 +34,12 @@
   /* Modo cliente (?modo=cliente): só situação, etapas que já ocorreram e linha do tempo */
   body.cliente .so-completo, body.cliente tr.nao-consta { display:none; }
   .link-cliente { display:flex; gap:8px; flex-wrap:wrap; } .link-cliente input { font-size:.9rem; }
+  select { font:inherit; padding:10px 8px; border:1px solid var(--linha); border-radius:8px; background:var(--card); color:var(--txt); }
+  .achado { font-weight:600; }
+  .abas { display:flex; gap:4px; margin-bottom:-1px; }
+  .aba { background:transparent; color:var(--dim); border:1px solid transparent; border-bottom:0; border-radius:10px 10px 0 0; padding:10px 12px; font-size:.92rem; flex:0 1 auto; }
+  .aba.ativa { background:var(--card); color:var(--txt); border-color:var(--linha); box-shadow:inset 0 3px 0 var(--dourado); }
+  td button.btn.sec { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -43,6 +49,11 @@
   <p class="so-completo">Digite o número do processo: o relatório (Word) e as certidões oficiais (PDF) ficam prontos para baixar.</p>
 </header>
 <main>
+  <nav class="abas so-completo" role="tablist">
+    <button type="button" role="tab" class="aba ativa" data-aba="abaNumero" aria-selected="true">Por número do processo</button>
+    <button type="button" role="tab" class="aba" data-aba="abaNome" aria-selected="false">Por nome da parte</button>
+  </nav>
+  <div id="abaNumero">
   <div class="card" id="cartaoBusca">
     <form id="f" class="so-completo">
       <input id="num" placeholder="0000000-00.0000.8.04.0000" autocomplete="off" required>
@@ -50,7 +61,25 @@
     </form>
     <div class="status" id="status"></div>
   </div>
+  </div>
 
+  <div id="abaNome" class="oculto">
+  <div class="card">
+    <form id="fNome">
+      <input id="nome" placeholder="Nome da parte (ex.: Maria José da Silva)" autocomplete="off" required minlength="5">
+      <select id="trib" aria-label="Tribunal"><option value="TJAM">TJAM</option><option value="">Todos os tribunais</option></select>
+      <button id="btnNome">Buscar processos</button>
+    </form>
+    <div class="status" id="statusNome"></div>
+  </div>
+  <div id="resNome" class="card oculto"><h2>Processos encontrados pelo nome</h2>
+    <p class="muted" id="notaNome"></p>
+    <label class="muted"><input type="checkbox" id="soExato" style="flex:none"> só quem tem exatamente esse nome (tira os nomes parecidos)</label>
+    <div class="tabela-wrap"><table id="tNome"></table></div>
+  </div>
+  </div>
+
+  <div id="abaNumero2">
   <div id="res" class="oculto">
     <div class="card so-completo">
       <h2>Downloads</h2>
@@ -79,10 +108,12 @@
         <a class="btn sec" id="abreLink" target="_blank" rel="noopener">Abrir</a></div>
     </div>
   </div>
+  </div>
 </main>
 <script>
 // ===== AKE: build log (append-only) =====
 window._VERSION_LOG = [
+  { v: "1.5.0", data: "2026-10-16", autor: "[Proton]", nota: "Pedido da cliente (áudio de 16/10): 'jogar o nome do cara e filtrar os processos que ele tem'. Nova aba 'Por nome da parte' (a busca por número ficou intacta na 1ª aba): busca no DJEN (nomeParte, TJAM ou todos), agrupada por processo: parte encontrada e polo, classe, órgão, última publicação; clique abre a consulta do processo. Filtro 'só nome exato' para tirar homônimos parecidos." },
   { v: "1.4.0", data: "2026-10-14", autor: "[Nexus]", nota: "Card 'Link para o cliente' no fim da página: ?processo=<n>&modo=cliente abre versão enxuta (situação, etapas ocorridas, linha do tempo; sem partes/advogados, downloads e fontes)." },
   { v: "1.3.1", data: "2026-10-14", autor: "[Nexus]", nota: "Link direto com ?processo=<número>: a página abre já consultando." },
   { v: "1.3.0", data: "2026-10-14", autor: "[Nexus]", nota: "Cliente consultou processo do TJPA (8.14): o proxy só aceitava TJAM e a página mostrou tudo 'ainda não consta' sem dizer por quê. Proxy agora deduz o tribunal pelo número (TJs, TRFs, TRTs, TREs, STJ); página e .docx sem 'TJAM' fixo; motivo aparece quando não há dados." },
@@ -91,6 +122,7 @@ window._VERSION_LOG = [
   { v: "1.0.0", data: "2026-10-14", autor: "[Claude]", nota: "Consulta por número no DJEN (Comunica/CNJ, CORS liberado), certidões PDF, marcos em linguagem simples, relatório .docx e ZIP no navegador; DataJud via proxy Apps Script opcional (CORS bloqueado na API do CNJ)." },
 ];
 window._VICIOS_CONHECIDOS = [
+  "Busca por nome (DJEN nomeParte): acha só processos com publicação no DJEN; sigilosos e processos sem intimação publicada não aparecem. O DJEN casa nomes parecidos (contém), por isso o filtro 'só nome exato'.",
   "DJEN: texto de algumas publicações do TJAM vem com acentos corrompidos na origem (ex.: 'Distribuiï¿½ï¿½o'); o PDF da certidão está correto.",
   "DataJud: API sem CORS; direto do navegador não funciona. Use DATAJUD_PROXY (Apps Script).",
 ];
@@ -308,6 +340,56 @@ $("dlZip").onclick = async () => {
   } catch (e) { $("status").textContent = "Erro ao montar o ZIP: " + e.message; }
   finally { b.disabled = false; }
 };
+// ===== Busca por nome da parte (DJEN, parâmetro nomeParte) =====
+const semAcento = (t) => (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+let ACHADOS = [];
+$("fNome").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const nome = $("nome").value.trim(), alvo = semAcento(nome);
+  $("btnNome").disabled = true; $("resNome").classList.add("oculto");
+  $("statusNome").textContent = "Procurando publicações com esse nome no Diário de Justiça Eletrônico Nacional…";
+  try {
+    const params = { nomeParte: nome }; if ($("trib").value) params.siglaTribunal = $("trib").value;
+    const itens = await comunica(params), procs = new Map();
+    for (const p of itens) {
+      const k = p.numero_processo;
+      const partes = (p.destinatarios || []).filter((x) => semAcento(x.nome).includes(alvo));
+      const g = procs.get(k) || { numero: p.numeroprocessocommascara || fmt(k), tribunal: p.siglaTribunal, classe: p.nomeClasse, orgao: p.nomeOrgao, ultima: "", n: 0, partes: new Map() };
+      g.n++; if (p.data_disponibilizacao > g.ultima) { g.ultima = p.data_disponibilizacao; g.orgao = p.nomeOrgao; g.classe = p.nomeClasse; }
+      for (const x of partes) g.partes.set(x.nome, x.polo === "A" ? "autor/ativo" : x.polo === "P" ? "réu/passivo" : x.polo || "");
+      procs.set(k, g);
+    }
+    ACHADOS = [...procs.values()].sort((a, b) => b.ultima.localeCompare(a.ultima));
+    ACHADOS.alvo = alvo;
+    $("notaNome").textContent = `${ACHADOS.length} processo(s) em ${itens.length} publicação(ões) do DJEN, do mais recente para o mais antigo.` +
+      (itens.length >= 2000 ? " Atenção: o limite de 2.000 publicações foi atingido; refine o nome (nome completo) para não perder processos." : "") +
+      " Só aparecem processos com publicação no DJEN (sigilosos não aparecem). Clique em Abrir para ver o andamento.";
+    listarAchados();
+    $("resNome").classList.remove("oculto");
+    $("statusNome").innerHTML = ACHADOS.length ? '<span class="ok">Pronto.</span>' : "Nenhuma publicação no DJEN com esse nome.";
+  } catch (e) { $("statusNome").textContent = "Erro na busca: " + e.message; }
+  finally { $("btnNome").disabled = false; }
+};
+function listarAchados() {
+  const exato = $("soExato").checked;
+  const lista = ACHADOS.filter((g) => !exato || [...g.partes.keys()].some((n) => semAcento(n) === ACHADOS.alvo));
+  $("tNome").innerHTML = "<tr><th>Processo</th><th>Parte encontrada</th><th>Classe / órgão</th><th>Última publicação</th><th></th></tr>" +
+    lista.map((g) => `<tr><td>${esc(g.numero)}<br><span class="muted">${esc(g.tribunal)} · ${g.n} publicação(ões)</span></td>
+      <td>${[...g.partes].map(([n, polo]) => `<span class="achado">${esc(n)}</span> <span class="muted">(${esc(polo)})</span>`).join("<br>") || '<span class="muted">nome no texto da publicação</span>'}</td>
+      <td>${esc(g.classe)}<br><span class="muted">${esc(g.orgao)}</span></td><td>${dataBR(g.ultima)}</td>
+      <td><button class="btn sec" type="button" data-n="${esc(g.numero)}">Abrir</button></td></tr>`).join("");
+  for (const b of $("tNome").querySelectorAll("button[data-n]")) b.onclick = () => {
+    abrirAba("abaNumero"); $("num").value = b.dataset.n; $("f").requestSubmit(); scrollTo({ top: 0, behavior: "smooth" });
+  };
+}
+$("soExato").onchange = listarAchados;
+// Abas: "Por número" é a busca original, intacta; "Por nome" é a nova (a cliente pediu, 16/10/2026)
+function abrirAba(id) {
+  for (const b of document.querySelectorAll(".aba")) { const on = b.dataset.aba === id; b.classList.toggle("ativa", on); b.setAttribute("aria-selected", on); }
+  $("abaNumero").classList.toggle("oculto", id !== "abaNumero"); $("abaNumero2").classList.toggle("oculto", id !== "abaNumero");
+  $("abaNome").classList.toggle("oculto", id !== "abaNome");
+}
+for (const b of document.querySelectorAll(".aba")) b.onclick = () => abrirAba(b.dataset.aba);
 </script>
 </body>
 </html>
